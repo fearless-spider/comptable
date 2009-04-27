@@ -1,0 +1,212 @@
+%{
+#include <iostream>
+#include <stdio.h>
+#include <string>
+#include "tableOfSymbols.cpp"
+
+unsigned int counterID = 1;
+int preType = NONE;
+unsigned int isReference = nReference;
+unsigned int scopeControl = 1;
+string tempName = "";
+unsigned int returnParameters = NONE;
+FILE * outputFile;
+FILE * inputFile;
+char name[100];
+
+extern FILE * yyin;
+extern char * yytext;
+
+int yylex();
+int yyerror(char *s);
+%}
+
+%union {
+  int intval;
+  double realval;
+  char * stringval;
+}
+
+%token <stringval> ID
+%token <intval> INTNUM
+%token <realval> REALNUM
+
+%token PROGRAM
+%token BEGIN
+%token END
+%token REPEAT
+%token UNTIL
+%token READ
+%token WRITE
+%token NOT
+%token ASSIGN
+%token JW
+%token JM
+%token WR
+%token MR
+%token WHILE
+%token DO
+%token DIV
+%token MOD
+%token FUNCTION
+%token PROCEDURE
+%token VAR
+%token INTEGER
+%token REAL
+%token ARRAY
+%token OF
+%token IF
+%token THEN
+%token ELSE
+%token AND
+%token OR
+%token NR
+%token RW
+%token DOTS
+
+%%
+programbase:    PROGRAM {tableOfSymbols.init(); printf("start\n");}
+                ID {printf("Program find: %s", yylval.stringval);}
+                '(' ID ',' {printf(" (%s,", yylval.stringval);}
+                ID ')' ';' {printf(" %s)\n\n", yylval.stringval); printf("Declaration: \n");}
+                declare_section {printf("\nFunction: \n");}
+                subprograms
+                code_section {printf("Code section: \n");}
+                '.'      {printf("end."); tableOfSymbols.printSymbol();}
+
+;
+id_list:	ID {tableOfSymbols.add(yytext); tableOfSymbols.setReference(isReference); printf("Find indetifier: %s \n", yylval.stringval);}
+                | id_list ',' {counterID++;} 
+                ID {tableOfSymbols.addSymbol(yytext); tableOfSymbols(isReference); printf("Find idetifier: %s\n", yylval.stringval);}
+;                
+declare_section:	declare_section VAR {printf("keyword VAR\n");} 
+                        id_list ':' type ';' {tableOfSymbols.setType(counterID, preType); counterID = 1; preType = 0;}
+;
+type:		base_type
+|		ARRAY '[' INTNUM	{tableOfSymbols.setBeginningTable(counterID, yylval.intval);}
+                DOTS INTNUM		{tableOfSymbols.setEndTable(counterID, yylval.intval);}
+                ']' OF base_type	{tableOfSymbols.setTableType(counterID, preType); preType = tTable;}
+;
+base_type:	INTEGER			{preType = tInt; printf("keyword integer\n");}
+                REAL			{preType = tReal; printf("keyword real\n");}
+;
+subprograms:	subprograms sub_declaration ';'
+;
+sub_declaration:	sub_start declare_section code_section
+;
+sub_start:	FUNCTION {isReference = Reference; printf("keyword function\n");}
+                ID {printf("Function %s\n", yylval.stringval);}
+                {
+                tableOfSymbols.addSymbol(yytext);
+                tempName = yytext;
+                tableOfSymbols.setType(counterID, tFunction);
+                tableOfSymbols.setReference(isReference);
+                }
+                arguments ':' base_type
+                {
+                tableOfSymbols.setReturnType(tempName, preType);
+                preType = NONE;
+                }
+                ';'
+                | PROCEDURE {isReference = Reference;}
+                ID 
+                {
+                tableOfSymbols.addSymbol(yytext);
+                tempName = yytext;
+                tableOfSymbols.setType(counterID, tProcedure);
+                tableOfSymbols.setReference(isReference);
+                }
+                arguments ';'
+;
+arguments:	'(' param_list ')' { tableOfSymbols.setParameters(tempName. returnParameters); returnParameters=0;tempName="";}
+;
+param_list:	id_list ':' type
+                {
+                tableOfSymbols.setType(counterID, preType); returnParameters += counterID; counterID = 1; preType = NONE;isReference = nReference;}
+                | param_list ';' id_list ':' type
+                {tableOfSymbols.setType(counterID, preType); returnParameters += counterID; counterID = 1; pretype = NONE;isReference = nReference;}
+;
+code_section:	BEGIN code_body END
+;
+code_body:	statements
+                | statements ';'
+;
+statements:	statement
+                | statements ';' statement
+;
+statement:	variable ASSIGN expr
+                | procedure_statement
+                | code_section
+                | IF {printf("IF\n");} expr THEN {printf("THEN\n");} statement
+                | IF {printf("IF\n");} expr THEN {printf("THEM\n");} statement ELSE statement {printf("ELSE\n");}
+                | WHILE expr DO statement
+;
+variable:	ID 
+                | ID '[' expr ']'
+;
+procedure_statement: ID
+                    | ID '(' expr_list ')'
+;
+expr_list:	expr
+                | expr_list ',' expr
+;
+expr:		simple_expr
+                | simple_expr JW simple_expr
+                | simple_expr WR simple_expr
+                | simple_expr MR simple_expr
+                | simple_expr NR  simple_expr
+                | simple_expr RW simple_expr
+                | simple_expr JM  simple_expr
+;
+simple_expr:	term
+                | sign term
+                | simple_expr '+' term
+                | simple_expr '-' term
+                | simple_expr OR term
+;
+term:           factor
+                | term '*' factor
+                | term '/' factor
+                | term DIV factor
+                | term MOD factor
+                | term AND factor
+;
+factor:                 variable
+                | ID '('expr_list')'
+                | INTNUM
+                | REALNUM
+                | '(' expr ')'
+                | NOT factor
+;
+sign:           '-'
+                | '+'
+;
+                                                                                                                                                                                                                                                                                                                                                                                                                 
+%%
+int yyerror(char * s) {
+  printf("11%s \n", s);
+  return 0;
+}
+
+int main(int argc, char * argv[]) {
+  if(argc != 2) {
+    printf("\n No input file PAS \n\n");
+    return 0;
+  }
+  
+  if((inputFile = fopen(argv[1], "r")) == NULL) {
+    printf("\n Error on open file OUTPUT \n\n");
+    return 0;
+  }
+  
+  yyin = inputFile;
+  
+  if((outputFile = fopen("out.asm", "w+")) == NULL) {
+    printf("\n Error on open file ASM \n\n");
+  }
+  
+  yyparse();
+  fclose(inputFile);
+  fclose(outputFile);
+  return 0;
+}
